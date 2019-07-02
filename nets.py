@@ -11,7 +11,7 @@ import numpy as np
 import torch.nn as nn
 import torch.optim as optim
 # from dataloader import dataloader
-from readDataToGAN import *
+# from readDataToGAN import *
 
 class generator(nn.Module):
     """
@@ -24,63 +24,59 @@ class generator(nn.Module):
     """
     # Network Architecture is exactly same as in infoGAN (https://arxiv.org/abs/1606.03657)
     # Architecture : FC1024_BR-FC7x7x128_BR-(64)4dc2s_BR-(1)4dc2s_S
-    def __init__(self, input_dim=100, output_dim=1, input_size=32):
+    def __init__(self, input_dim=1, output_dim=1, input_size=32):
         super(generator, self).__init__()
         self.input_dim = input_dim
         self.output_dim = output_dim
         self.input_size = input_size
 
-        self.fc = nn.Sequential(
-            nn.Linear(self.input_dim, 1024),
-            # nn.BatchNorm1d(1024),
-            nn.ReLU(),
-            nn.Linear(1024, 64 * (8 * 4)),
-            # nn.BatchNorm1d(64 * (8 * 4)),
-            nn.ReLU(),
-        )
         self.deconv = nn.Sequential(
-            nn.ConvTranspose2d(64, 32, (4,2), 2, 1),
+            nn.ConvTranspose2d(512, 256, 2, 2),
             # nn.BatchNorm2d(32),
             nn.ReLU(),
-            nn.ConvTranspose2d(32, 16, (4,3), 2, 1),
-            # nn.BatchNorm2d(16),
+            nn.ConvTranspose2d(256, 128, 2, 2),
             nn.ReLU(),
-            nn.ConvTranspose2d(16, self.output_dim, (4,3), 2, 1),
+            nn.ConvTranspose2d(128, 64, 2, 2),
+            nn.ReLU(),
+            nn.ConvTranspose2d(64, 1, 2, 2),
             nn.Tanh(),
         )
         utils.initialize_weights(self)
 
+        self.fc = nn.Sequential(
+            nn.Linear(256, 3*4*512),
+            nn.ReLU(),
+        )
     def forward(self, input):
         x = self.fc(input)
         # x = x.view(-1, 128, (self.input_size // 4), (self.input_size // 4))
-        x = x.view(-1, 64, 8,4)
+        x = x.view(-1, 512, 4, 3)
         x = self.deconv(x)
 
         return x
 
+
 class discriminator(nn.Module):
-    # Network Architecture is exactly same as in infoGAN (https://arxiv.org/abs/1606.03657)
-    # Architecture : (64)4c2s-(128)4c2s_BL-FC1024_BL-FC1_S
-    def __init__(self, input_dim=1, output_dim=1, input_size=32):
-        super(discriminator, self).__init__()
+    # input 64*48
+    def __init__(self, input_dim=1, output_dim=1, input_size=64):
+        super(discriminator,self).__init__()
         self.input_dim = input_dim
         self.output_dim = output_dim
         self.input_size = input_size
 
         self.conv = nn.Sequential(
-            nn.Conv2d(self.input_dim, 16, (4,2), 2, 1),
-            nn.LeakyReLU(0.2),
-            nn.Conv2d(16, 32, (4, 2), 2, 1),
-            nn.LeakyReLU(0.2),
-            nn.Conv2d(32, 64, (4,2), 2, 1),
-            nn.BatchNorm2d(64),
-            nn.LeakyReLU(0.2),
+            # nn.Conv2d(self.input_dim, 8, (2,1), (2,1)),#torch.Size([64, 8, 32, 48])
+            nn.Conv2d(self.input_dim, 64, (4,5), (2,1),(1,2)),#torch.Size([64, 8, 32, 48])
+            nn.ReLU(),
+            # nn.Conv2d(8, 16, (2, 1), (2, 1)),
+            nn.Conv2d(64, 128, (4, 5), (2, 1), (1, 2)),  # torch.Size([64, 8, 32, 48])
+
+            # nn.Conv2d(8, 16, (4,1), (2,1),(1,0)),
+            nn.ReLU(),
         )
         self.fc = nn.Sequential(
-            # nn.Linear(128 * (self.input_size // 4) * (self.input_size // 4), 1024),
-            nn.Linear(64 * ( 8* 4), 1024),
-            nn.BatchNorm1d(1024),
-            nn.LeakyReLU(0.2),
+            nn.Linear(128 * 16*(16 * 3), 1024),
+            nn.ReLU(),
             nn.Linear(1024, self.output_dim),
             nn.Sigmoid(),
         )
@@ -88,44 +84,17 @@ class discriminator(nn.Module):
 
     def forward(self, input):
         x = self.conv(input)
-        # x = x.view(-1, 128 * (self.input_size // 4) * (self.input_size // 4))
-        x = x.view(-1, 64 * (8 * 4))
+        x = x.view(-1, 128 * 16*(16 * 3))
         x = self.fc(x)
-
         return x
 
-class CNN(nn.Module):
-    # Network Architecture is exactly same as in infoGAN (https://arxiv.org/abs/1606.03657)
-    # Architecture : (64)4c2s-(128)4c2s_BL-FC1024_BL-FC1_S
-    def __init__(self, input_dim=1, output_dim=1, input_size=32):
-        super(discriminator, self).__init__()
-        self.input_dim = input_dim
-        self.output_dim = output_dim
-        self.input_size = input_size
+# t = torch.ones((64,1,64,48))
+# print(t.size())
+# g = discriminator(1,1,64)
+# l = g(t)
+# print(l.size())
 
-        self.conv = nn.Sequential(
-            nn.Conv2d(self.input_dim, 16, (4,2), 2, 1),
-            nn.LeakyReLU(0.2),
-            nn.Conv2d(16, 32, (4, 2), 2, 1),
-            nn.LeakyReLU(0.2),
-            nn.Conv2d(32, 64, (4,2), 2, 1),
-            nn.BatchNorm2d(64),
-            nn.LeakyReLU(0.2),
-        )
-        self.fc = nn.Sequential(
-            # nn.Linear(128 * (self.input_size // 4) * (self.input_size // 4), 1024),
-            nn.Linear(64 * ( 8* 4), 1024),
-            nn.BatchNorm1d(1024),
-            nn.LeakyReLU(0.2),
-            nn.Linear(1024, self.output_dim),
-            nn.Sigmoid(),
-        )
-        utils.initialize_weights(self)
-
-    def forward(self, input):
-        x = self.conv(input)
-        # x = x.view(-1, 128 * (self.input_size // 4) * (self.input_size // 4))
-        x = x.view(-1, 64 * (8 * 4))
-        x = self.fc(x)
-
-        return x
+# qq = torch.randn((64,256))
+# g = generator()
+# l = g(qq)
+# print(l.size())

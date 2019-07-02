@@ -14,9 +14,9 @@ title = lambda string: string.title()
 
 BATCH_SIZE = 64
 
-test_addr = "/home/gjj/PycharmProjects/ADA/netsData/hackingData/new_data/"
-
-source_addr = "/home/gjj/PycharmProjects/ADA/netsData/hackingData/GANdata/"
+# test_addr = "/home/gjj/PycharmProjects/ADA/netsData/hackingData/new_data/"
+#
+# source_addr = "/home/gjj/PycharmProjects/ADA/netsData/hackingData/GANdata/"
 
 # 大数据下训练:验证:测试比例 98:1:1
 def DataloadtoGAN(path,mark=None,label=False,single_dataset=False,hacking=False,select=''):
@@ -241,22 +241,25 @@ def base_read(path,mark=str,target_type=str,bias_dataset=str):
         data = data1.values.astype(np.float64)
 
         rows = data.shape[0]
+        column = data.shape[1]
+        print('data column:',column)
         start = 0
         row = int(rows // 64)
         end = int(row*64)
         if mark:
             if mark == 'test':
-                start = int(int(row * 0.99)*64)
-                row = int(row * 0.01)
+                start = int(int(row * 0.81)*64)
+                row = int(row * 0.19)
                 end = int(start + row * 64)
             elif mark == 'train':
-                row = int(row * 0.98)
+                row = int(row * 0.8)
                 end = int(row * 64)
             elif mark == 'validate':
                 row = int(row * 0.01)
-                start = int(int((row * 0.98)) * 64)
+                start = int(int((row * 0.8)) * 64)
                 end = int(start + row * 64)
                 print('row:{},row%64={}|{}'.format(row, row % 64, (end - start) % 64))
+
             elif mark == 'coding':
                 row = int(row * 0.001)
                 end = int(row * 64)
@@ -267,29 +270,37 @@ def base_read(path,mark=str,target_type=str,bias_dataset=str):
 
         # batch label,if any label 1 in a batch size of data,batch label marked as 1
         count_1 = 0
-        for r in range(row):
-            num = 0
-            if 1. in source_flags[start + r*64: start + r*64+64] or 1 in source_flags[start + r*64: start + r*64+64]:
-                num = 1
-                count_1 += 1
-            flag.append(num)
-        print('{} {},{} has shape {},read by pandas,'.format(file,bias_dataset,filename,data1.shape),'label 1|0:{}|{}'.format(count_1,row-count_1),end=',')
+        count_0 = 0
+        if 'pure' in filename:
+            if 'attack' in filename:
+                flags.append(np.ones((row,1)).tolist())
+                count_1 = row
+            elif 'normal' in filename:
+                flags.append(np.zeros((row,1)).tolist())
+                count_0 = row
+            print('{} {},{} has shape {},read by pandas,'.format(file,bias_dataset,filename,data1.shape),'label 1|0:{}|{}'.format(count_1,count_0),end=',')
 
-        flags.append(flag)
-        data = data[start:end,:-1].reshape((-1,64,21))
+        else:
+            for r in range(row):
+                num = 0
+                if 1. in source_flags[start + r*64: start + r*64+64] or 1 in source_flags[start + r*64: start + r*64+64]:
+                    num = 1
+                    count_1 += 1
+                flag.append(num)
+            print('{} {},{} has shape {},read by pandas,'.format(file,bias_dataset,filename,data1.shape),'label 1|0 : {}|{}'.format(count_1,row-count_1),end=',')
+            flags.append(flag)
+        data = data[start:end,:-1].reshape((-1,64,column-1))
         data_list.append(data)
-        # print('Error!!! Error!!! file name: {},data shape: {},flags size:{},row:{}'.format(file,data.shape,len(flags),row))
-        print('{} start at:{},end at:{} acquires len of labels :{} data size:{},'
-              'row:{} done read files!!!\n'.format(file, start,end,len(flags),data.shape,row))
-    # print('-'*40,'flags class:%s'%flags.__class__)
+        print('{} start at:{},end at:{}, len of labels : {} data size:{},'
+              'row:{} done read files!!!\n'.format(file, start,end,len(flags[-1]),data.shape,row))
     print('-'*20,'%s end!'%file,'-'*20)
-    return flags,data_list,file
+    return flags,data_list,file,data_list[0].shape[-1]
 
 
-def read_dataset(root_path=str,target_type=str,read_target=str,usage=str,res_num=int,res_type='dataloader', selected=None,bias_dataset=str):#,label=True
+def read_dataset(root_path_=str,target_type=str,read_target=str,usage=str,res_num=int,res_type='dataloader', selected=None,bias_dataset=str):#,label=True
     """
     func:read dataset to nets,get data to Nets,satisfied multifunction
-    :param root_path:basedir of dataset
+    :param root_path_:basedir of dataset
     :param target_type: 'csv','pkl','txt'
     :param read_target:'all','select'
     :param usage: 'train','validate','test','coding'
@@ -301,13 +312,13 @@ def read_dataset(root_path=str,target_type=str,read_target=str,usage=str,res_num
     :return: list of dataloarder or single dataloarder contained all read dataset
     """
     print('-----------------------------------%s,%s-----------------------------'%(read_dataset.__name__,usage))
-    print('data address:{}, sub-dataset:{}'.format(root_path,os.listdir(root_path)))
+    print('data address:{}, sub-dataset:{}'.format(root_path_,os.listdir(root_path_)))
     if selected != None:
         selected = list(map(title,selected))
     if read_target == 'all':
-        files = [os.path.join(root_path,f) for f in os.listdir(root_path)]
+        files = [os.path.join(root_path_,f) for f in os.listdir(root_path_)]
     elif read_target == 'select':
-        files = [os.path.join(root_path,f) for f in os.listdir(root_path) if f.title() in selected]
+        files = [os.path.join(root_path_,f) for f in os.listdir(root_path_) if f.title() in selected]
     else:
         print('func read_dataset: arise error at param read_target')
 
@@ -340,10 +351,12 @@ def read_dataset(root_path=str,target_type=str,read_target=str,usage=str,res_num
     names = []
     flags = []
     row = 0
+    column = results[0].get()[3]
+    # print('column:',column)
     if res_type == 'seperate':
         data = []
     else:
-        data = np.empty((64,21))
+        data = np.empty((64,column))
 
     f2 = lambda x:len(x)
     for i, result in enumerate(results):
@@ -354,6 +367,7 @@ def read_dataset(root_path=str,target_type=str,read_target=str,usage=str,res_num
         for flg in result[0]:
             # print(flg.__class__,len(flg))
             row += len(flg)
+
             if res_type == 'seperate':
                 flags.append(flg)
             else:
@@ -368,21 +382,20 @@ def read_dataset(root_path=str,target_type=str,read_target=str,usage=str,res_num
         la = 0
         for dt in result[1]:
             if res_type == 'seperate':
-                data.append(np.array(dt).astype(np.float64).reshape((-1,64,21)))
+                data.append(np.array(dt).astype(np.float64).reshape((-1,64,column)))
             else:
-                dt = np.array(dt).reshape((-1,64,21)).astype(np.float64)
+                dt = np.array(dt).reshape((-1,64,column)).astype(np.float64)
                 if la == 0 and i == 0:
                     data = dt
                     la += 1
                 else:
-                    data = np.concatenate((data,dt)).reshape((-1,64,21))
+                    data = np.concatenate((data,dt)).reshape((-1,64,column))
         # flags.append(result[0])
         # data.append(result[1])
         names.append(result[2])
         # row += sum(list(map(f2,result[0])))
     print('-'*20,'total result','-'*20)
     print('\n return {} blocks of data,{} blocks of label,all {} blocks'.format(data.__len__(), len(flags), row),end=',')
-    # print(data.__class__,flags.__class__,data.shape,len(flags))
     if res_type == 'seperate':
         return data,flags,names
     print(names,end=',')
@@ -403,7 +416,7 @@ def read_dataset(root_path=str,target_type=str,read_target=str,usage=str,res_num
         dataloaders = []
         f1 = lambda x: x.dataset.tensors[0].size()
         for i,label,dat in enumerate(list(zip(flags,data))):
-            dat = np.array(dat).reshape((-1,64,21))
+            dat = np.array(dat).reshape((-1,64,column))
             label = np.array(label).reshape((-1,1))
             TraindataM = torch.from_numpy(dat).float()  # transform to float torchTensor
             TraindataM = torch.unsqueeze(TraindataM, 1)
@@ -417,14 +430,14 @@ def read_dataset(root_path=str,target_type=str,read_target=str,usage=str,res_num
         return dataloaders,names
 
 
-if __name__ == '__main__':
-    addr = '/home/yyd/dataset/hacking/separateToAttackAndNormal/ignore_ID_-1_1/'#attack data
-    # for i in os.listdir(addr):
-    #     print(os.path.join(addr,i))
-    # def read_dataset(root_path=str, target_type=str, read_target=str, usage=str, res_num=int, res_type='dataloarder', selected=None, bias_dataset=str):  # ,label=True
-
-    dataloader,names = read_dataset(root_path=addr,target_type='pkl',read_target='select',usage='coding',res_num=1,res_type='dataloader',bias_dataset='attack',selected=['rpm','gear'])
-    # flags,data,names = read_dataset(root_path=addr,target_type='pkl',read_target='select',usage='coding',res_num=1,res_type='seperate',bias_dataset='both',selected=['rpm','gear'])
+# if __name__ == '__main__':
+#     addr = '/home/yyd/dataset/hacking/one-hot-repeat-lab'#attack data
+#     # for i in os.listdir(addr):
+#     #     print(os.path.join(addr,i))
+#     # def read_dataset(root_path_=str, target_type=str, read_target=str, usage=str, res_num=int, res_type='dataloarder', selected=None, bias_dataset=str):  # ,label=True
+#
+#     dataloader,names = read_dataset(root_path_=addr,target_type='pkl',read_target='select',usage='train',res_num=1,res_type='dataloader',bias_dataset='both',selected=['rpm'])
+    # flags,data,names = read_dataset(root_path_=addr,target_type='pkl',read_target='select',usage='coding',res_num=1,res_type='seperate',bias_dataset='both',selected=['rpm','gear'])
 
     # flags,data,name = base_read(os.path.join(addr,'DoS'),mark='coding',target_type='pkl',bias_dataset='both')
 
