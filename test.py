@@ -134,23 +134,24 @@ def test_attfree(path, logmark, file, test,name=None):#flags,
             dat1.to_csv(url_numpy,sep=',',float_format='%.2f',header=None,index=None,mode='a',encoding='utf-8')
         else:
             dat1.to_csv(url_numpy,sep=',',float_format='%.2f',header=True,index=None,mode='a',encoding='utf-8')
-    fpr,tpr,_ = roc_curve(y_test,y_pre_)
+    # fpr,tpr,_ = roc_curve(y_test,y_pre_)
     # auc_score = roc_auc_score(np.array(y_test), np.array(y_pre_))
     # auc_score = np.squeeze(auc_score).item()
 
-    plt.figure(1)
-    plt.plot([0, 1], [0, 1], 'k--')
-    imname = '{}_test_at_{}_roc_curve'.format(logmark,file)
-
-    plt.xlabel('False positive rate')
-    plt.ylabel('True positive rate')
-    plt.title('ROC curve')
-
-    result_dir = os.path.join(pic_url,'{}_test_at_{}_roc_curve.png'.format(logmark,file))
-    plt.legend(loc='best')
-    plt.savefig(result_dir)
-    plt.show()
-    plt.close()
+    # if int(logmark)%50 == 0:
+    #     plt.figure(1)
+    #     plt.plot([0, 1], [0, 1], 'k--')
+    #     imname = '{}_test_at_{}_roc_curve'.format(logmark,file)
+    #
+    #     plt.xlabel('False positive rate')
+    #     plt.ylabel('True positive rate')
+    #     plt.title('ROC curve')
+    #
+    #     result_dir = os.path.join(pic_url,'{}_test_at_{}_roc_curve.png'.format(logmark,file))
+    #     plt.legend(loc='best')
+    #     plt.savefig(result_dir)
+    #     # plt.show()
+    #     plt.close()
 
     res = {}
     # 1 precision of position
@@ -337,7 +338,7 @@ if __name__ == '__main__':
 
     module_path = '/home/yyd/PycharmProjects/repeat_lab/repeat_lab'
     test_addr = '/home/yyd/dataset/hacking/one-hot-repeat-lab'
-    result_path = '/home/yyd/PycharmProjects/repeat_lab/test_and_CMP'
+    result_path = '/home/yyd/PycharmProjects/repeat_lab/test_mix_pure_normal_and_CMP'
 
     """test Discriminator using attacking dataset and generative data"""
     print('start at:{}'.format(time.asctime(time.localtime(time.time()))))
@@ -348,11 +349,13 @@ if __name__ == '__main__':
     testData = []
     names = []
     dataloaders, names = read_dataset(
-        root_path_=test_addr,target_type='pkl',read_target='all',usage='test',res_num=4,res_type='dataloader',bias_dataset='attack')
-
-    pool = multiprocessing.Pool(processes=len(names))
-    for dat,name in list(zip(dataloaders,names)):
-        parallel_test_for_attackdataset(module_path, name, dat)#(modules_dir,attack_name,dataset,flag=None):
-    pool.close()
-    pool.join()
+        root_path_=test_addr,target_type='pkl',read_target='all',usage='test',res_num=1,res_type='dataloader',bias_dataset='normal')
+    if dataloaders.__class__ != list:
+        parallel_test_for_attackdataset(module_path, 'mix', dataloaders)#(modules_dir,attack_name,dataset,flag=None):
+    else:
+        pool = multiprocessing.Pool(processes=len(names))
+        for dat,name in list(zip(dataloaders,names)):
+            parallel_test_for_attackdataset(module_path, name, dat)#(modules_dir,attack_name,dataset,flag=None):
+        pool.close()
+        pool.join()
     print('done at:{}'.format(time.asctime(time.localtime(time.time()))))

@@ -192,19 +192,38 @@ def print_network(net):
 
 def loss_plot(hist, path = 'Train_hist.png', model_name = ''):
     # x = range(len(hist['D_loss']))
-    x = range(1,len(hist['per_epoch_loss'])+1)
-
+    flag = 0
     try:
-        # y1 = hist['D_loss']
+        x = range(1,len(hist['per_epoch_loss'])+1)
+    except:
+        try:
+            x = range(1,len(hist['per_epoch_G_loss'])+1)
+            flag = 1
+        except:
+            try:
+                x = range(1, len(hist['G_loss'] + 1))
+                flag = 2
+            except:
+                print('could not draw loss curve!!')
+    if flag==1:
+        try:
+            y1 = hist['per_epoch_D_loss']
+            plt.plot(x, y1, label='D_loss')
+            y2 = hist['per_epoch_G_loss']
+            plt.plot(x, y2, label='G_loss')
+        except:
+            pass
+    elif flag == 2:
+        try:
+            y1 = hist['D_loss']
+            plt.plot(x, y1, label='D_loss')
+            y2 = hist['G_loss']
+            plt.plot(x, y2, label='G_loss')
+        except:
+            pass
+    else:
         y1 = hist['per_epoch_loss']
         plt.plot(x, y1, label='D_loss')
-    except:
-        pass
-    try:
-        y2 = hist['G_loss']
-        plt.plot(x, y2, label='G_loss')
-    except:
-        pass
 
     # plt.xlabel('Iter')
     plt.xlabel('epoch')

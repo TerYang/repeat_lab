@@ -191,7 +191,7 @@ def base_read(path,mark=str,target_type=str,bias_dataset=str):
     urls = []
     file = path.split('/')[-1]
     fg = 0
-    print('get type:%s' % mark)
+    print('get type:%s' % mark,end=',')
     for i in os.listdir(path):
         if bias_dataset.title() == 'Both':
             if 'normal'.lower() in i and target_type in i:
@@ -313,6 +313,7 @@ def read_dataset(root_path_=str,target_type=str,read_target=str,usage=str,res_nu
     """
     print('-----------------------------------%s,%s-----------------------------'%(read_dataset.__name__,usage))
     print('data address:{}, sub-dataset:{}'.format(root_path_,os.listdir(root_path_)))
+    # selected attack type to read data
     if selected != None:
         selected = list(map(title,selected))
     if read_target == 'all':
@@ -351,19 +352,25 @@ def read_dataset(root_path_=str,target_type=str,read_target=str,usage=str,res_nu
     names = []
     flags = []
     row = 0
+
     column = results[0].get()[3]
     # print('column:',column)
-    if res_type == 'seperate':
+    if res_type == 'seperate' or res_num > 1:
         data = []
     else:
         data = np.empty((64,column))
 
     f2 = lambda x:len(x)
+    # ll = 0
     for i, result in enumerate(results):
         # result = result#.get()
         result = result.get()
         # print('i:', i,'file:',result[2])
-        ll = 0
+        # # print('%s,%d'%(result[2],len(flg)))
+        # flags.append(result[0])
+        # data.append(result[1])
+        label_ = []
+        # ll = 0
         for flg in result[0]:
             # print(flg.__class__,len(flg))
             row += len(flg)
@@ -371,31 +378,59 @@ def read_dataset(root_path_=str,target_type=str,read_target=str,usage=str,res_nu
             if res_type == 'seperate':
                 flags.append(flg)
             else:
-                if ll == 0 and i == 0:
-                    flags = flg
-                    # print('fg:',flg,flg.__class__)
-                    ll+=1
-                else:
-                    # print('flags:',flags)
-                    flags.extend(flg)
-                # print('%s,%d'%(result[2],len(flg)))
+                label_.extend(flg)
+                #  older codes
+                # if ll == 0 and i == 0:
+                #     flags = flg
+                #     # print('fg:',flg,flg.__class__)
+                #     ll+=1
+                # else:
+                #     # print('flags:',flags)
+                #     flags.extend(flg)
+                # # print('%s,%d'%(result[2],len(flg)))
+        # concat normal status and attack status or single data suche as normal status or attack status
+        # of all types of attack to one container
+        # concat all to one container
+        if res_num == 1:
+            flags.extend(label_)
+        # concat to res_num containers,res_num default equal to the number of target_type
+        else:
+            flags.append(label_)
+
         la = 0
+        dat = np.empty((1,64,column))
         for dt in result[1]:
             if res_type == 'seperate':
                 data.append(np.array(dt).astype(np.float64).reshape((-1,64,column)))
             else:
                 dt = np.array(dt).reshape((-1,64,column)).astype(np.float64)
-                if la == 0 and i == 0:
-                    data = dt
+                if la == 0:
+                    dat = dt
                     la += 1
                 else:
-                    data = np.concatenate((data,dt)).reshape((-1,64,column))
-        # flags.append(result[0])
-        # data.append(result[1])
+                    dat = np.concatenate((dat,dt),axis=0).reshape((-1,64,column))
+                # older codes
+                # if la == 0 and i == 0:
+                #     data = dt
+                #     la += 1
+                # else:
+                #     data = np.concatenate((data,dt)).reshape((-1,64,column))
+        # concat normal status and attack status or single data suche as normal status or attack status
+        # of all types of attack to one container
+        # concat all to one container
+        if res_num == 1:
+            if i == 0:
+                data = dat
+            else:
+                data = np.concatenate((data,dat)).reshape((-1,64,column))
+        # concat to res_num containers,res_num default equal to the number of target_type
+        else:
+            data.append(dat)
         names.append(result[2])
         # row += sum(list(map(f2,result[0])))
     print('-'*20,'total result','-'*20)
     print('\n return {} blocks of data,{} blocks of label,all {} blocks'.format(data.__len__(), len(flags), row),end=',')
+
     if res_type == 'seperate':
         return data,flags,names
     print(names,end=',')
@@ -413,9 +448,11 @@ def read_dataset(root_path_=str,target_type=str,read_target=str,usage=str,res_nu
         print('------------------------------------------------------------------')
         return dataloader,names
     else:
+        print('result len:',len(data),len(flags))
         dataloaders = []
         f1 = lambda x: x.dataset.tensors[0].size()
-        for i,label,dat in enumerate(list(zip(flags,data))):
+        # for i,label,dat in enumerate(list(zip(flags,data))):
+        for label,dat in list(zip(flags,data)):
             dat = np.array(dat).reshape((-1,64,column))
             label = np.array(label).reshape((-1,1))
             TraindataM = torch.from_numpy(dat).float()  # transform to float torchTensor
@@ -424,20 +461,28 @@ def read_dataset(root_path_=str,target_type=str,read_target=str,usage=str,res_nu
             TorchDataset = Data.TensorDataset(TraindataM, Traindata_LabelM)
             dataloaders.append(Data.DataLoader(dataset=TorchDataset, batch_size=BATCH_SIZE, shuffle=True))
 
-        print('return list of dataloader has {} dataloarders,data shape:{}'.
+        print('return list of dataloader has {} dataloarders,data shape respectively:{}'.
               format(len(dataloaders), list(map(f1,dataloaders))))
         print('------------------------------------------------------------------')
         return dataloaders,names
 
 
-# if __name__ == '__main__':
-#     addr = '/home/yyd/dataset/hacking/one-hot-repeat-lab'#attack data
-#     # for i in os.listdir(addr):
-#     #     print(os.path.join(addr,i))
-#     # def read_dataset(root_path_=str, target_type=str, read_target=str, usage=str, res_num=int, res_type='dataloarder', selected=None, bias_dataset=str):  # ,label=True
-#
-#     dataloader,names = read_dataset(root_path_=addr,target_type='pkl',read_target='select',usage='train',res_num=1,res_type='dataloader',bias_dataset='both',selected=['rpm'])
+if __name__ == '__main__':
+    addr = '/home/yyd/dataset/hacking/one-hot-repeat-lab'#attack data
+    # for i in os.listdir(addr):
+    #     print(os.path.join(addr,i))
+    # def read_dataset(root_path_=str, target_type=str, read_target=str, usage=str, res_num=int, res_type='dataloarder', selected=None, bias_dataset=str):  # ,label=True
+
+    dataloaders,names = read_dataset(root_path_=addr,target_type='pkl',read_target='all',usage='coding',res_num=1,res_type='dataloader',bias_dataset='normal')
+
+    print(names)
+    print(dataloaders.dataset.__len__(),dataloaders.__class__,len(i.dataset.tensors))
+
     # flags,data,names = read_dataset(root_path_=addr,target_type='pkl',read_target='select',usage='coding',res_num=1,res_type='seperate',bias_dataset='both',selected=['rpm','gear'])
+    # print(dataloaders.dataset.__len__(),dataloaders.__class__,len(dataloaders.dataset.tensors))
+
+    # for i in dataloaders:
+    #     print(i.dataset.__len__(),i.__class__,len(i.dataset.tensors))
 
     # flags,data,name = base_read(os.path.join(addr,'DoS'),mark='coding',target_type='pkl',bias_dataset='both')
 
