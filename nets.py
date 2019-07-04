@@ -365,9 +365,8 @@ class GAN(object):
         self.train_hist = {}
 
         """dataset"""
-        data = next(iter(self.data_loader))[0]
+        data = next(iter(self.data_loader))[0]#torch.Size([64, 1, 64, 21])
 
-        # print('data.shape:',data.shape)#data.shape: torch.Size([64, 1, 64, 21])
         # networks ini
         self.G = generator(input_dim=self.z_dim, output_dim=data.shape[1], input_size=self.input_size)
         self.D = discriminator(input_dim=data.shape[1], output_dim=1, input_size=self.input_size)
@@ -434,12 +433,15 @@ class GAN(object):
         plt.xlabel('False positive rate')
         plt.ylabel('True positive rate')
         plt.title('ROC curve')
+        # model = '/home/yyd/PycharmProjects/repeat_lab/repeat_gan/DoS_gear_RPM_Fuzzy_GAN_CrossEnL_StepLR'
 
         for epoch in range(self.epoch):
 
+            # if epoch == 66:
+            #     # self.G = torch.load(os.path.join(model,'GAN_CrossEnL_StepLR_65_G.pkl'))
+            #     self.D = torch.load(os.path.join(model,'GAN_CrossEnL_StepLR_65_D.pkl'))
             self.G.train()
             self.D.train()
-
             epoch_start_time = time.time()
             # for iter, (x_, _) in enumerate(self.data_loader):
             for iter, (x_,l_) in enumerate(self.data_loader):
@@ -511,7 +513,7 @@ class GAN(object):
                 self.D.cuda()
                 acc_G = self.validate_G(self.valdata.dataset.tensors[0].shape[0] // 2)
 
-                if epoch % 5 == 0:
+                if epoch % 10 == 0:
                     # draws roc curve per 30 epoch and records auc_score
                     plt.plot(fpr, tpr, label=str(epoch))
                     self.writer.add_scalar('auc_score', auc_score, epoch)
@@ -569,8 +571,8 @@ class GAN(object):
         # 保存模型
         # torch.save(self.G, os.path.join(save_dir, self.model_name + '_{}_G.pkl'.format(epoch)))#dictionary ['bias', 'weight']
         torch.save(self.D, os.path.join(save_dir, self.model_name + '_{}_D.pkl'.format(epoch)))
-        if epoch%5 == 0:
-            torch.save(self.D, os.path.join(save_dir, self.model_name + '_{}_G.pkl'.format(epoch)))
+        if epoch%10 == 0:
+            torch.save(self.G, os.path.join(save_dir, self.model_name + '_{}_G.pkl'.format(epoch)))
 
     def writelog(self, content):
         save_dir = os.path.join(self.save_dir,'_'.join([self.dataset,self.model_name]))
