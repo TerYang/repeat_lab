@@ -11,14 +11,14 @@ import multiprocessing
 import re
 from sklearn.preprocessing import OneHotEncoder
 from sklearn.metrics import roc_curve,roc_auc_score
-
-GPU_ENBLE = False
-DATA_TYPE = 'attack_free'#'hacking_datasets'
-TEST_Gen = False # test Generator generates data at the same time
+import torch.nn as nn
+GPU_ENBLE = True
+# DATA_TYPE = 'attack_free'#'hacking_datasets'
+# TEST_Gen = False # test Generator generates data at the same time
 
 columns_ = ['pre','N_pre','F1','acc','recall',]
 BATCH_SIZE = 64
-
+Z_SIZE = 256 # generative source size
 def writelog(content,url=None):
     # a = '/home/gjj/PycharmProjects/ADA/TorchGAN-your-mind/Nets/full/2019-04-17/test_logs/'
     if url == None:
@@ -52,11 +52,12 @@ def test_attfree(path, logmark, file, test,name=None):#flags,
     # result = np.empty((2, 1))
     # if len(jf):
     # global Dnet
-    Dnet = torch.load(path,map_location='cpu')
     if GPU_ENBLE:
-        pass
+        Dnet = torch.load(path)
+
     else:
-        Dnet = Dnet.cpu()
+        # Dnet = Dnet.cpu()
+        Dnet = torch.load(path, map_location='cpu')
 
     TP = 0  # 1 -> 1 true positive
     TN = 0  # 0 -> 0 true negative
@@ -81,12 +82,12 @@ def test_attfree(path, logmark, file, test,name=None):#flags,
     total = 0
     # detail_url = './detail/{}'.format(file)
     detail_url = './{}_detail'.format(file)
-    pic_url = './{}_picture'.format(file)
+    # pic_url = './{}_picture'.format(file)
     if not os.path.exists(detail_url):
         os.makedirs(detail_url)
-        os.makedirs(pic_url)
+        # os.makedirs(pic_url)
     url_numpy = os.path.join(detail_url,'{}_test_at_{}.csv'.format(logmark,file))
-    y_test = []
+    y_true = []
     y_pre_ = []
 
     label0 = 0
@@ -96,31 +97,54 @@ def test_attfree(path, logmark, file, test,name=None):#flags,
             total = iter
             break
         if GPU_ENBLE:
+            flag = 1
             x_ = x_.cuda()
             try:
                 Results = Dnet(x_)
-                result = Results.data.cpu().numpy()
             except:
                 try:
                     Results, _ = Dnet(x_)
-                    result = Results.data.cpu().numpy()
                 except:
+                    flag = 0
                     print('path:', path,'file:',file)
+            if flag:
+                pass
+            else:
+                return
+            if Results.cpu().size(1) == 2:
+                linear = nn.Linear(2, 1).cuda()
+                sigmod = nn.Sigmoid().cuda()
+                Results = sigmod(linear(Results))
+            result = Results.data.cpu().numpy()
+
         else:
+            flag = 1
             try:
                 Results = Dnet(x_)
-                result = Results.data.numpy()
+                # result = Results.data.numpy()
                 # print(len(result))
             except:
-                # try:
-                Results, _ = Dnet(x_)
-                result = Results.data.numpy()
-                # except:
-                #     print('path:', path,'file:',file)
+                try:
+                    Results, _ = Dnet(x_)
+                    # result = Results.data.numpy()
+                except:
+                    flag = 0
+                    print('path:', path,'file:',file)
+            if flag:
+                pass
+            else:
+                return
+            if Results.size(1) == 2:
+                linear = nn.Linear(2, 1)
+                sigmod = nn.Sigmoid()
+                Results = sigmod(linear(Results))
+
+            result = Results.data.numpy()
+
         result = np.squeeze(result).tolist()
         label = np.squeeze(label_.data.numpy()).tolist()
         y_pre_.extend(result)
-        y_test.extend(label)
+        y_true.extend(label)
         label0 += label.count(0)
         label1 += label.count(1)
 
@@ -134,24 +158,30 @@ def test_attfree(path, logmark, file, test,name=None):#flags,
             dat1.to_csv(url_numpy,sep=',',float_format='%.2f',header=None,index=None,mode='a',encoding='utf-8')
         else:
             dat1.to_csv(url_numpy,sep=',',float_format='%.2f',header=True,index=None,mode='a',encoding='utf-8')
-    # fpr,tpr,_ = roc_curve(y_test,y_pre_)
-    # auc_score = roc_auc_score(np.array(y_test), np.array(y_pre_))
-    # auc_score = np.squeeze(auc_score).item()
 
-    # if int(logmark)%50 == 0:
-    #     plt.figure(1)
-    #     plt.plot([0, 1], [0, 1], 'k--')
-    #     imname = '{}_test_at_{}_roc_curve'.format(logmark,file)
-    #
-    #     plt.xlabel('False positive rate')
-    #     plt.ylabel('True positive rate')
-    #     plt.title('ROC curve')
-    #
-    #     result_dir = os.path.join(pic_url,'{}_test_at_{}_roc_curve.png'.format(logmark,file))
-    #     plt.legend(loc='best')
-    #     plt.savefig(result_dir)
-    #     # plt.show()
-    #     plt.close()
+    fpr,tpr = [],[]
+    try:
+        fpr, tpr, _ = roc_curve(y_true, y_pre_)
+    except :
+        pass
+    # if int(logmark)%10 == 0:
+    #      fpr,tpr,_ = roc_curve(y_test,y_pre_)
+         # plt.figure(1)
+         # plt.plot([0, 1], [0, 1], 'k--')
+         # imname = '{}'.format(logmark)
+         # plt.plot(fpr, tpr,label=imname)
+         # # plt.xlabel('False positive rate')
+         # # plt.ylabel('True positive rate')
+         # # plt.title('ROC curve')
+         #
+         # # result_dir = os.path.join(pic_url,'{}_test_at_{}_roc_curve.png'.format(logmark,file))
+         # # plt.legend(loc='best')
+         # # plt.savefig(result_dir)
+         # # plt.show()
+         # # plt.close()
+    # release gpu memory
+    if hasattr(torch.cuda, 'empty_cache'):
+        torch.cuda.empty_cache()
 
     res = {}
     # 1 precision of position
@@ -219,7 +249,13 @@ def test_attfree(path, logmark, file, test,name=None):#flags,
     writelog('test case: {} had finshed module:{}'.format(file,logmark),file)
     writelog('time test spent :{}'.format(t2 - t1), file)
     writelog('*'*40,file)
-    return res
+    try:
+        auc_score = roc_auc_score(np.array(y_true), np.array(y_pre_))
+        # auc_score = np.squeeze(auc_score).item()
+        return res, auc_score,fpr,tpr
+
+    except:
+        return res,fpr,tpr
 
 def getModulesList(modules_path):
     """
@@ -241,7 +277,7 @@ def getModulesList(modules_path):
     for i,module in enumerate(modules):
         jf = pattern.findall(module)
         if len(jf):
-            num_seq.append(jf[0])
+            num_seq.append(jf[-1])
         else:
             # 这里必须要取值大于epoch
             num_seq.append('100000')
@@ -270,7 +306,7 @@ def parallel_test_for_attackdataset(modules_dir,attack_name,dataset,flag=None):
     for name in os.listdir(modules_dir):
         module_url = os.path.join(module_path, name)
         result_url = os.path.join(result_path, name)
-        module_urls, seqs = getModulesList(module_url)
+        # module_urls, seqs = getModulesList(module_url)
 
         print('\n------------------------{} test at {}--------------------------------------------------------------'.format(attack_name,name))
         if not os.path.exists(result_url):
@@ -285,6 +321,17 @@ def parallel_test_for_attackdataset(modules_dir,attack_name,dataset,flag=None):
         ress = {}
         for i in columns_:
             ress[i] = []
+        # draw auc_sorce curve,roc curve
+        auc_socres = []
+        plt.figure(1)
+        plt.plot([0, 1], [0, 1], 'k--')
+        plt.xlabel('False positive rate')
+        plt.ylabel('True positive rate')
+        plt.title('ROC curve')
+        pic_url = './{}_picture'.format(name)
+        if not os.path.exists(pic_url):
+            os.makedirs(pic_url)
+        result_dir = os.path.join(pic_url,'{}_roc_curve.png'.format(name))
 
         for i, url in list(zip(seqs,module_urls)):
             # add test generative data as attack data for testing
@@ -299,11 +346,11 @@ def parallel_test_for_attackdataset(modules_dir,attack_name,dataset,flag=None):
                 # G_net = torch.load(G_path)
 
                 # generative attack data
-                for i in range(row):
+                for j in range(row):
                     # z_ = torch.rand((BATCH_SIZE, 62)).cuda()
-                    z_ = torch.rand((BATCH_SIZE, 62))
+                    z_ = torch.rand((BATCH_SIZE, Z_SIZE))
                     G_ = G_net(z_)
-                    if i == 0:
+                    if j == 0:
                         # Gen_data = G_.data.cpu().numpy()
                         Gen_data = G_.data.numpy()
                         # print(Gen_data.shape)
@@ -322,12 +369,44 @@ def parallel_test_for_attackdataset(modules_dir,attack_name,dataset,flag=None):
                 TorchDataset = Data.TensorDataset(dataM, labelM)
                 dataset = Data.DataLoader(dataset=TorchDataset, batch_size=BATCH_SIZE, shuffle=True)
 
-            # tes = test_attfree(url,i,attack_name,dataset,name)#return dict test_attfree(path, logmark, file, test)
-            tes = test_attfree(url,i,attack_name,dataset,name)#(path, logmark, file, test,name=None)
+            objs = test_attfree(url,i,attack_name,dataset,name)#return dict test_attfree(path, logmark, file, test)
+            # print(objs.__class__,'-'*10)
+            try:
+                (tes,auc_score,fpr, tpr) = objs
+                # print('4'*50)
+                auc_socres.append(auc_score)
+
+            except:
+                (tes,fpr, tpr) = objs#(path, logmark, file, test,name=None)
+                # print('8'*50)
+                # return
+            # print('_'.join([str(i) for _ in range(20)]))
+            if int(i) % 10 == 0 and len(fpr) != 0:
+                imname = '{}'.format(i)
+                plt.plot(fpr, tpr, label=imname)
             for key,item in tes.items():
                 if key == 'NA':
                     key = None
                 ress[key].append(item)
+        # torch.empty_cache()
+        # draw roc curve and auc_score curve
+        plt.legend(loc='best')
+        plt.savefig(result_dir)
+        plt.show()
+        plt.close()
+
+        if len(auc_socres) != 0:
+            result_dir = os.path.join(pic_url,'{}_auc_score_curve.png'.format(name))
+            plt.figure(1)
+            plt.xlabel('epoch')
+            plt.ylabel('auc score')
+            plt.title('auc score curve')
+            plt.plot(seqs, auc_socres, label='auc score per epoch')
+            plt.legend(loc='best')
+            plt.savefig(result_dir)
+            plt.show()
+            plt.close()
+
         ress['Module No.'] = seqs
         summary_url = os.path.join(result_url,name+'_test_{}_analysis_summary.csv'.format(attack_name))
         data = pd.DataFrame(ress,columns=list(ress.keys()))
@@ -336,10 +415,15 @@ def parallel_test_for_attackdataset(modules_dir,attack_name,dataset,flag=None):
 
 if __name__ == '__main__':
 
-    module_path = '/home/yyd/PycharmProjects/repeat_lab/repeat_lab'
+    # module_path = '/home/yyd/PycharmProjects/repeat_lab/repeat_lab'
+    module_path = '/home/yyd/PycharmProjects/repeat_lab/repeat_gan'
     test_addr = '/home/yyd/dataset/hacking/one-hot-repeat-lab'
-    result_path = '/home/yyd/PycharmProjects/repeat_lab/test_mix_pure_normal_and_CMP'
-
+    result_path = '/home/yyd/PycharmProjects/repeat_lab/test_gan'
+    # for i in os.listdir(module_path):
+    #    models,seqs = getModulesList(os.path.join(module_path,i))
+    #    print(seqs)
+    #    print(i,len(models),len(seqs),models[0])
+    # exit()
     """test Discriminator using attacking dataset and generative data"""
     print('start at:{}'.format(time.asctime(time.localtime(time.time()))))
     print('test dataset:%s'%test_addr)
